@@ -21,7 +21,7 @@ typedef union _floatUintUnion {
 
 _floatUint rxBuffer;
 char data[10];
-uint8_t status, pos = 0, signalStrengthArray[256], signalStrengthRaw;
+uint8_t status, pos = 0, signalStrengthArray[10], signalStrengthRaw;
 volatile uint8_t  signalStrength;
 uint16_t sum = 0;
 float throttle, roll, pitch, yaw;
@@ -70,12 +70,16 @@ void interruptHandler(void)
     }
     if (status & 64)
     { // RX received
-        radio.read((status & 14) >> 1, &rxBuffer.c[0], 2);
+        radio.read((status & 14) >> 1, &rxBuffer.c[0], 4);
         radio.setRegister(0x07, 64);
         packetReceived = true;
     }
     signalStrength = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
+    // pos = (pos+1) & 49;
     pos++;
+    if (pos >=10){
+        pos = 0;
+    }
 }
 
 void mainLoop(void)
@@ -123,6 +127,8 @@ void screenLoop(void)
         sprintf(test, "%u.%u", (uint16_t)(rxBuffer.f),(uint16_t)((rxBuffer.f * 100)) & 99);
         writeText(&display, test , 4, 85,10);
         packetReceived = false;
+    } else {
+        writeText(&display, "----", 4, 85, 10)
     }
 
     display.setTextCursor(85, 20);
@@ -165,11 +171,12 @@ int main()
         radio.setRfFrequency(2400 + 101);
         radio.setTransferSize(10);
         radio.setCrcWidth(16);
-        radio.setTxAddress(0x007FFFFFFF);
-        radio.setRxAddress(0x007FFFFFFF);
+        radio.setTxAddress(0x007DEADBEE);
+        radio.setRxAddress(0x007DEADBEE);
         radio.enableAutoAcknowledge(NRF24L01P_PIPE_P0);
         radio.setAirDataRate(NRF24L01P_DATARATE_250_KBPS);
         radio.enableAutoRetransmit(1000, 3);
+        // radio.setRegister(0x1D,6);
         radio.setTransmitMode();
         radioInterrupt.fall(&interruptHandler);
 
@@ -178,7 +185,7 @@ int main()
         writeText(&display, "TXRX", 4, 58,20);
 
         display.display();
-        ticker.attach(&mainLoop, 0.01);
+        ticker.attach(&mainLoop, 0.05);
         screenLoop();
         ticker2.attach(&screenLoop, 0.5);
         // while(true){
