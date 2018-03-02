@@ -1,66 +1,85 @@
 #include <mbed.h>
 #include "nRF24L01P.hpp"
 #include "Adafruit_SSD1306.h"
+#include "displayHelper.hpp"
+#include "stdio.h"
+
+Serial pc(USBTX, USBRX);
 
 InterruptIn radioInterrupt(D8);
-Ticker ticker;
+Ticker ticker, ticker2;
 I2C i2cDevice(PB_7, PB_6);
 AnalogIn throttlePin(A0), rollPin(A1), pitchPin(A2), yawPin(A3), battery(A6);
 DigitalIn switch1Pin(D4), switch2Pin(D5);
+nRF24L01P radio(D11, D12, D13, D10, D9);
+Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
-nRF24L01P radio(D11,D12,D13,D10,D9);
-Adafruit_SSD1306_I2c display(i2cDevice,D2);
+typedef union _floatUintUnion {
+    float f;
+    char c[4];
+} _floatUint;
 
-char rxBuffer[10], data[10];
-uint8_t status, pos = 0, signalStrengthArray[256], signalStrength, signalStrengthRaw;
-uint16_t throttle, roll, pitch, yaw, sum = 0;
+_floatUint rxBuffer;
+char data[10];
+uint8_t status, pos = 0, signalStrengthArray[256], signalStrengthRaw;
+volatile uint8_t  signalStrength;
+uint16_t sum = 0;
+float throttle, roll, pitch, yaw;
 bool switch1, switch2, packetReceived;
 
 uint8_t movingAvg(uint8_t *ptrArrNumbers, uint16_t *ptrSum, uint8_t pos, uint16_t len, uint8_t nextNum)
 {
-  //Subtract the oldest number from the prev sum, add the new number
-  *ptrSum = *ptrSum - ptrArrNumbers[pos] + nextNum;
-  //Assign the nextNum to the position in the array
-  ptrArrNumbers[pos] = nextNum;
-  //return the average
-  return *ptrSum / len;
+    //Subtract the oldest number from the prev sum, add the new number
+    *ptrSum = *ptrSum - ptrArrNumbers[pos] + nextNum;
+    //Assign the nextNum to the position in the array
+    ptrArrNumbers[pos] = nextNum;
+    //return the average
+    return *ptrSum / len;
 }
 
-void interruptHandler(void){
+void interruptHandler(void)
+{
+    
     status = radio.getStatusRegister();
-    if (status == 0){ //data not ready?
-        while (status == 0 ){
+    if (status == 0)
+    { //data not ready?
+        while (status == 0)
+        {
             status = radio.getStatusRegister();
         }
     }
 
-    if (status & 1){ // TX FIFO full
+    if (status & 1)
+    { // TX FIFO full
         radio.disable();
         radio.flushTX();
     }
-    if (status & 16){ // max TX retransmits
+    if (status & 16)
+    { // max TX retransmits
         radio.disable();
         radio.flushTX();
-        radio.setRegister(0x07,16);
+        radio.setRegister(0x07, 16);
         signalStrengthRaw = 0;
     }
-    if (status & 32){ // TX sent (ACK package available if autoAck is enabled)
+    if (status & 32)
+    { // TX sent (ACK package available if autoAck is enabled)
         radio.disable();
         radio.flushTX();
-        radio.setRegister(0x07,32);
+        radio.setRegister(0x07, 32);
         signalStrengthRaw = 100;
     }
-    if (status & 64){ // RX received
-        radio.read((status & 14) >> 1, &rxBuffer[0],2);
-        radio.setRegister(0x07,64);
+    if (status & 64)
+    { // RX received
+        radio.read((status & 14) >> 1, &rxBuffer.c[0], 2);
+        radio.setRegister(0x07, 64);
         packetReceived = true;
     }
-
     signalStrength = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
     pos++;
 }
 
-void mainLoop(void){
+void mainLoop(void)
+{
     throttle = throttlePin.read();
     roll = rollPin.read();
     pitch = pitchPin.read();
@@ -68,72 +87,102 @@ void mainLoop(void){
     switch1 = switch1Pin.read();
     switch2 = switch2Pin.read();
 
-    data[0]= (throttle & 0xFF);
-    data[1]= throttle >> 8;
-    data[2]= (roll & 0xFF);
-    data[3]= roll >> 8;
-    data[4]= (pitch & 0xFF);
-    data[5]= pitch >> 8;
-    data[6]= (yaw & 0xFF);
-    data[7]= yaw >> 8;
+    // data[0] = (throttle & 0xFF);
+    // data[1] = throttle >> 8;
+    // data[2] = (roll & 0xFF);
+    // data[3] = roll >> 8;
+    // data[4] = (pitch & 0xFF);
+    // data[5] = pitch >> 8;
+    // data[6] = (yaw & 0xFF);
+    // data[7] = yaw >> 8;
     data[8] = ((switch1 & 1) << 1) | (switch2 & 1);
 
-    radio.write(NRF24L01P_PIPE_P0, &data[0], 10);
+    radio.write(NRF24L01P_PIPE_P0, &data[0], 9);
 }
 
-void screenLoop(void){
-    display.setTextCursor(75,0);
-    display.writeChar((char)(battery.read()*10.35)+48);
-    display.writeChar('.');
-    display.writeChar((char)((uint8_t)(battery.read()*103.5) & 9)+48);
-    if (packetReceived){
-        display.setTextCursor(75,10);
-        float rxBatteryLevel = *(reinterpret_cast<float*>(rxBuffer));
-        display.writeChar((char)(rxBatteryLevel)+48);
-        display.writeChar('.');
-        display.writeChar((char)((uint8_t)(rxBatteryLevel) & 9)+48);
+void screenLoop(void)
+{
+    if (switch1){
+        writeText(&display, "ARMED", 5, 0,0);
+    } else {
+        writeText(&display, "SAFE", 4, 0,0);
+    }
+
+    if (switch2){
+        writeText(&display, "STABLE", 6, 0,10);
+    } else {
+        writeText(&display, "ACRO", 4, 0,10);
+    }
+    char test[10];
+    float batteryLevel = battery.read() * 14.20;
+    sprintf(test, "%u.%u", (uint16_t)((batteryLevel)),(uint16_t)((batteryLevel*100)) & 99);
+    writeText(&display, test , 4, 85,0);
+
+    if (packetReceived)
+    {
+        sprintf(test, "%u.%u", (uint16_t)(rxBuffer.f),(uint16_t)((rxBuffer.f * 100)) & 99);
+        writeText(&display, test , 4, 85,10);
         packetReceived = false;
     }
-    display.setTextCursor(75,20);
-    display.writeChar((char)(signalStrength & 9)+48);
-    display.writeChar((char)((signalStrength/10) & 9)+48);
-    display.writeChar((char)((signalStrength/100) & 1)+48);
+
+    display.setTextCursor(85, 20);
+
+    if (signalStrength <= 5)
+    {
+        writeText(&display, "---", 3, 85,20);
+    }
+    else if ((signalStrength > 5) && (signalStrength <= 20))
+    {
+        writeText(&display, "LOW", 3, 85,20);
+    }
+    else
+    {   char text[10];
+        sprintf(text, "%u", signalStrength);
+        writeText(&display, text , 3, 85,20);
+    }
     display.display();
 }
 
-int main() {
-    radio.powerUp();
-    radio.setRfFrequency(2400 + 50);
-    radio.setTransferSize(10);
-    radio.setCrcWidth(16);
-    radio.setTxAddress(0x007FFFFFFF);
-    radio.setRxAddress(0x007FFFFFFF);
-    radio.enableAutoAcknowledge(NRF24L01P_PIPE_P0);
-    radio.setAirDataRate(NRF24L01P_DATARATE_250_KBPS);
-    radio.enableAutoRetransmit(500, 3);
-    radio.setTransmitMode();
-    radioInterrupt.fall(&interruptHandler);
-
+int main()
+{
     i2cDevice.frequency(400000);
     display.begin(SSD1306_SWITCHCAPVCC);
     display.clearDisplay();
     display.setRotation(2);
-    display.setTextCursor(60,0);
-    display.writeChar('T');
-    display.writeChar('X');
 
-    display.setTextCursor(60,10);
-    display.writeChar('R');
-    display.writeChar('X');
+    uint8_t statRegister = radio.getStatusRegister();
+    if ((statRegister != 0x08) && (statRegister != 0x0e) && (statRegister != 0x0f))
+    {
+        writeText(&display, "TX ERROR", 8, 70,0);
+        char text[10];
+        sprintf(text, "STATUS %u" ,statRegister);
+        writeText(&display, text , 10, 46,10);
+        display.display();
+    }
+    else
+    {
+        radio.powerUp();
+        radio.setRfFrequency(2400 + 101);
+        radio.setTransferSize(10);
+        radio.setCrcWidth(16);
+        radio.setTxAddress(0x007FFFFFFF);
+        radio.setRxAddress(0x007FFFFFFF);
+        radio.enableAutoAcknowledge(NRF24L01P_PIPE_P0);
+        radio.setAirDataRate(NRF24L01P_DATARATE_250_KBPS);
+        radio.enableAutoRetransmit(1000, 3);
+        radio.setTransmitMode();
+        radioInterrupt.fall(&interruptHandler);
 
+        writeText(&display, "TX", 2, 70,0);
+        writeText(&display, "RX", 2, 70,10);
+        writeText(&display, "TXRX", 4, 58,20);
 
-    display.setTextCursor(48,20);
-    display.writeChar('T');
-    display.writeChar('X');
-    display.writeChar('R');
-    display.writeChar('X');
-
-    display.display();
-    ticker.attach(&mainLoop, 0.01);
-    ticker.attach(&screenLoop, 0.5);
+        display.display();
+        ticker.attach(&mainLoop, 0.01);
+        screenLoop();
+        ticker2.attach(&screenLoop, 0.5);
+        // while(true){
+            // wait(1);
+        // }
+    }
 }

@@ -332,6 +332,7 @@ public:
     int writeAcknowledgePayload(int pipe, uint8_t * package, uint8_t length);
 
     void flushTX(void);
+    void flushRX(void);
 
 private:
     SPI         spi_;
@@ -339,6 +340,8 @@ private:
     DigitalOut  ce_;
     InterruptIn nIRQ_;
 
+    void spiInterruptHandler(int);
+    bool transferComplete;
     int mode;
 
 };

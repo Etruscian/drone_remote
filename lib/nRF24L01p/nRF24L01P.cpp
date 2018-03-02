@@ -206,6 +206,7 @@ nRF24L01P::nRF24L01P(PinName mosi,
     disableAutoRetransmit();
     setTransferSize();
     flushTX();
+    flushRX();
 
     mode = _NRF24L01P_MODE_POWER_DOWN;
 
@@ -222,7 +223,6 @@ void nRF24L01P::powerUp(void) {
 
     // Wait until the nRF24L01+ powers up
     wait_us( _NRF24L01P_TIMING_Tpd2stby_us );
-
     mode = _NRF24L01P_MODE_STANDBY;
 
 }
@@ -614,7 +614,7 @@ void nRF24L01P::setRxAddress(unsigned long long address, int width, int pipe) {
 
     nCS_ = 0;
 
-    int status = spi_.write(cn);
+    spi_.write(cn);
 
     while ( width-- > 0 ) {
 
@@ -691,7 +691,7 @@ void nRF24L01P::setTxAddress(unsigned long long address, int width) {
 
     nCS_ = 0;
 
-    int status = spi_.write(cn);
+    spi_.write(cn);
 
     while ( width-- > 0 ) {
 
@@ -757,7 +757,7 @@ unsigned long long nRF24L01P::getRxAddress(int pipe) {
 
     nCS_ = 0;
 
-    int status = spi_.write(cn);
+    spi_.write(cn);
 
     for ( int i=0; i<width; i++ ) {
 
@@ -813,7 +813,7 @@ unsigned long long nRF24L01P::getTxAddress(void) {
 
     nCS_ = 0;
 
-    int status = spi_.write(cn);
+    spi_.write(cn);
 
     for ( int i=0; i<width; i++ ) {
 
@@ -1055,6 +1055,14 @@ void nRF24L01P::flushTX(void){
     nCS_ = 0;
 
     int status = spi_.write(_NRF24L01P_SPI_CMD_FLUSH_TX);
+
+    nCS_ = 1;
+}
+
+void nRF24L01P::flushRX(void){
+    nCS_ = 0;
+
+    int status = spi_.write(_NRF24L01P_SPI_CMD_FLUSH_RX);
 
     nCS_ = 1;
 }
