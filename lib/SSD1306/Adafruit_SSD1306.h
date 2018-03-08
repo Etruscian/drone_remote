@@ -54,7 +54,13 @@ public:
 		: Adafruit_GFX(rawWidth,rawHeight)
 		, rst(RST,false)
 	{
-		buffer[0] = 0x40;
+		buffer[0] = 0x0;
+		buffer[1] = 0x00|0x0;
+		buffer[2] = 0x0;
+		buffer[3] = 0x10|0x0;
+		buffer[4] = 0x0;
+		buffer[5] = 0x40|0x0;
+		buffer[6] = 0x40;
 	};
 
 	void begin(uint8_t switchvcc = SSD1306_SWITCHCAPVCC);
@@ -72,6 +78,7 @@ public:
 	void display();
 	/// Fill the buffer with the AdaFruit splash screen.
 	virtual void splash();
+	bool transferComplete = true;
     
 protected:
 	virtual void sendDisplayBuffer() = 0;
@@ -111,7 +118,7 @@ public:
 		    display();
 	    };
 
-	virtual void command(uint8_t c)
+	void command(uint8_t c)
 	{
 	    cs = 1;
 	    dc = 0;
@@ -120,7 +127,7 @@ public:
 	    cs = 1;
 	};
 
-	virtual void data(uint8_t c)
+	void data(uint8_t c)
 	{
 	    cs = 1;
 	    dc = 1;
@@ -130,7 +137,7 @@ public:
 	};
 
 protected:
-	virtual void sendDisplayBuffer()
+	void sendDisplayBuffer()
 	{
 		cs = 1;
 		dc = 1;
@@ -178,9 +185,10 @@ public:
 		    begin();
 		    splash();
 		    display();
+			mi2c.frequency(1000000);
 	    };
 
-	virtual void command(uint8_t c)
+	void command(uint8_t c)
 	{
 		char buff[2];
 		buff[0] = 0; // Command Mode
@@ -188,7 +196,7 @@ public:
 		mi2c.write(mi2cAddress, buff, sizeof(buff));
 	}
 
-	virtual void data(uint8_t c)
+	void data(uint8_t c)
 	{
 		char buff[2];
 		buff[0] = 0x40; // Data Mode
@@ -201,15 +209,15 @@ public:
 	};
 
 	uint8_t i2cTransferStatus;
-	bool transferComplete = true;
+	
 protected:	
-	char buff[1];
-	virtual void sendDisplayBuffer()
+	void sendDisplayBuffer()
 	{
 		// if (transferComplete){
 			// mi2c.abort_transfer();
-			i2cTransferStatus = mi2c.transfer(mi2cAddress, buffer, sizeof(buffer), buff, 0, callback(this,&Adafruit_SSD1306_I2c::i2cInterruptHandler), I2C_EVENT_TRANSFER_COMPLETE);
-			// transferComplete = false;
+			transferComplete = false;
+
+			i2cTransferStatus = mi2c.transfer(mi2cAddress, buffer, sizeof(buffer), buffer, 0, callback(this,&Adafruit_SSD1306_I2c::i2cInterruptHandler), I2C_EVENT_ALL);
 		// }
 	};
 

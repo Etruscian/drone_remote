@@ -137,19 +137,24 @@ void Adafruit_SSD1306::invertDisplay(bool i)
 // Send the display buffer out to the display
 void Adafruit_SSD1306::display(void)
 {
-	command(SSD1306_SETLOWCOLUMN | 0x0);  // low col = 0
-	command(SSD1306_SETHIGHCOLUMN | 0x0);  // hi col = 0
-	command(SSD1306_SETSTARTLINE | 0x0); // line #0
+	// command(SSD1306_SETLOWCOLUMN | 0x0);// low col = 0
+	// command(SSD1306_SETHIGHCOLUMN | 0x0);// hi col = 0
+	// command(SSD1306_SETSTARTLINE | 0x0);// line #0
 	sendDisplayBuffer();
 }
 
 // Clear the display buffer. Requires a display() call at some point afterwards
 void Adafruit_SSD1306::clearDisplay(void)
 {
-	// memset(buffer, 0, sizeof(buffer));
 	for (uint16_t i = 0; i < sizeof(buffer); i++)
-		buffer[i] = 0;
+		buffer[i] = 0x0;
 	buffer[0] = 0x40;
+	// buffer[1] = 0x00|0x1;
+	// buffer[2] = 0x0;
+	// buffer[3] = 0x10|0x0;
+	// buffer[4] = 0x0;
+	// buffer[5] = 0x40|0x1;
+	// buffer[6] = 0x40;
 }
 
 void Adafruit_SSD1306::splash(void)

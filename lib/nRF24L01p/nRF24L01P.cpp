@@ -849,17 +849,9 @@ bool nRF24L01P::readable(int pipe) {
 int nRF24L01P::write(int pipe, char *data, int count) {
     // Note: the pipe number is ignored in a Transmit / write
 
-    //
-    // Save the CE state
-    //
-    // int originalCe = ce_;
-    // disable();
-
     if ( count <= 0 ) return 0;
     if ( count > _NRF24L01P_TX_FIFO_SIZE ) count = _NRF24L01P_TX_FIFO_SIZE;
 
-    // Clear the Status bit
-    //setRegister(_NRF24L01P_REG_STATUS, _NRF24L01P_STATUS_TX_DS);
     nCS_ = 0;
 
     spi_.write(_NRF24L01P_SPI_CMD_WR_TX_PAYLOAD);
@@ -872,29 +864,7 @@ int nRF24L01P::write(int pipe, char *data, int count) {
 
     nCS_ = 1;
 
-    // int originalMode = mode;
-    // setTransmitMode();
-
     enable();
-    // wait_us(_NRF24L01P_TIMING_Thce_us);
-    // disable();
-
-//	wait_us(100);
-    // while ( !( getStatusRegister() & _NRF24L01P_STATUS_TX_DS ) ) {
-
-       // Wait for the transfer to complete
-    // }
-    // Clear the Status bit
-    // setRegister(_NRF24L01P_REG_STATUS, _NRF24L01P_STATUS_TX_DS);
-
-    // if ( originalMode == _NRF24L01P_MODE_RX ) {
-
-    //     setReceiveMode();
-
-    // }
-
-    // ce_ = originalCe;
-    // wait_us( _NRF24L01P_TIMING_Tpece2csn_us );
 
     return count;
 
