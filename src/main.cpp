@@ -16,7 +16,7 @@ Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
 _floatUint rxBuffer, gimbalValues[4];
 char sendBuffer[18];
-uint8_t status, pos = 0, signalStrengthArray[10], signalStrengthRaw, packetNotReceivedCounter;
+uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter;
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
 float throttle, roll, pitch, yaw;
@@ -71,7 +71,7 @@ void interruptHandler(void)
 
     signalStrength = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
     pos++;
-    if (pos >= 10)
+    if (pos >= 100)
     {
         pos = 0;
     }
@@ -203,6 +203,6 @@ int main()
         display.display();
         radioTicker.attach(&radioLoop, 0.01);
         screenLoop();
-        screenTicker.attach(&screenLoop, 0.5);
+        screenTicker.attach(&screenLoop, 0.1);
     }
 }
