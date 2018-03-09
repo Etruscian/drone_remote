@@ -20,17 +20,7 @@ uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotR
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
 float throttle, roll, pitch, yaw;
-volatile bool switch1, switch2, oldSwitch1, oldSwitch2, packetReceived;
-
-uint8_t movingAvg(uint8_t *ptrArrNumbers, uint16_t *ptrSum, uint8_t pos, uint16_t len, uint8_t nextNum)
-{
-    //Subtract the oldest number from the prev sum, add the new number
-    *ptrSum = *ptrSum - ptrArrNumbers[pos] + nextNum;
-    //Assign the nextNum to the position in the array
-    ptrArrNumbers[pos] = nextNum;
-    //return the average
-    return *ptrSum / len;
-}
+volatile bool switch1, switch2, oldSwitch1 = false, oldSwitch2, packetReceived;
 
 void interruptHandler(void)
 {
@@ -102,11 +92,11 @@ void screenLoop(void)
     {
         if (switch1)
         {
-            writeText(&display, "ARMED", 5, 0, 0);
+            writeText(&display, const_cast<char*>("ARMED"), 5, 0, 0);
         }
         else
         {
-            writeText(&display, "SAFE ", 5, 0, 0);
+            writeText(&display, const_cast<char*>("SAFE "), 5, 0, 0);
         }
         oldSwitch1 = switch1;
     }
@@ -115,11 +105,11 @@ void screenLoop(void)
     {
         if (switch2)
         {
-            writeText(&display, "STABLE", 6, 0, 10);
+            writeText(&display, const_cast<char*>("STABLE"), 6, 0, 10);
         }
         else
         {
-            writeText(&display, "ACRO  ", 6, 0, 10);
+            writeText(&display, const_cast<char*>("ACRO  "), 6, 0, 10);
         }
         oldSwitch2 = switch2;
     }
@@ -138,7 +128,7 @@ void screenLoop(void)
     }
     else if (!packetNotReceivedCounter)
     {
-        writeText(&display, "----", 4, 85, 10);
+        writeText(&display, const_cast<char*>("----"), 4, 85, 10);
         packetNotReceivedCounter++;
     }
 
@@ -146,11 +136,11 @@ void screenLoop(void)
 
     if (signalStrength <= 5)
     {
-        writeText(&display, "---", 3, 85, 20);
+        writeText(&display, const_cast<char*>("---"), 3, 85, 20);
     }
     else if ((signalStrength > 5) && (signalStrength <= 20))
     {
-        writeText(&display, "LOW", 3, 85, 20);
+        writeText(&display, const_cast<char*>("LOW"), 3, 85, 20);
     }
     else
     {
@@ -158,8 +148,6 @@ void screenLoop(void)
         sprintf(text, "%u", signalStrength);
         writeText(&display, text, 3, 85, 20);
     }
-
-    pc.printf("%u\n", display.transferComplete);
     display.display();
 }
 
@@ -176,7 +164,7 @@ int main()
     uint8_t statRegister = radio.getStatusRegister();
     if ((statRegister != 0x08) && (statRegister != 0x0e) && (statRegister != 0x0f))
     {
-        writeText(&display, "TX ERROR", 8, 70, 0);
+        writeText(&display, const_cast<char*>("TX ERROR"), 8, 70, 0);
         char text[10];
         sprintf(text, "STATUS %u", statRegister);
         writeText(&display, text, 10, 46, 10);
@@ -196,9 +184,9 @@ int main()
         radio.setTransmitMode();
         radioInterrupt.fall(&interruptHandler);
 
-        writeText(&display, "TX", 2, 70, 0);
-        writeText(&display, "RX", 2, 70, 10);
-        writeText(&display, "TXRX", 4, 58, 20);
+        writeText(&display, const_cast<char*>("TX"), 2, 70, 0);
+        writeText(&display, const_cast<char*>("RX"), 2, 70, 10);
+        writeText(&display, const_cast<char*>("TXRX"), 4, 58, 20);
 
         display.display();
         radioTicker.attach(&radioLoop, 0.01);
