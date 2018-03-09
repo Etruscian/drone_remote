@@ -114,15 +114,11 @@ void screenLoop(void)
         oldSwitch2 = switch2;
     }
 
-    char test[10];
-    float batteryLevel = battery.read() * 14.20;
-    sprintf(test, "%u.%u", (uint16_t)((batteryLevel)), (uint16_t)((batteryLevel * 100)) & 99);
-    writeText(&display, test, 4, 85, 0);
+    writeFloat(&display, battery.read() * 14.20, 4, 85, 0);
 
     if (packetReceived)
     {
-        sprintf(test, "%u.%u", (uint16_t)(rxBuffer.f), (uint16_t)((rxBuffer.f * 100)) & 99);
-        writeText(&display, test, 4, 85, 10);
+        writeFloat(&display, rxBuffer.f, 4, 85, 10);
         packetReceived = false;
         packetNotReceivedCounter = 0;
     }
