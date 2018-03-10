@@ -5,10 +5,10 @@
 #define NO_SPLASH_ADAFRUIT
 
 // Uncomment this to enable all functionality
-//#define GFX_WANT_ABSTRACTS
+// #define GFX_WANT_ABSTRACTS
 
 // Uncomment this to enable only runtime font scaling, without all the rest of the Abstracts
-//#define GFX_SIZEABLE_TEXT
+#define GFX_SIZEABLE_TEXT
 
 
 #endif

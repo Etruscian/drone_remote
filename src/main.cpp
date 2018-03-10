@@ -10,7 +10,7 @@ InterruptIn radioInterrupt(D8);
 Ticker radioTicker, screenTicker;
 I2C i2cDevice(PB_7, PB_6);
 AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0), battery(A6);
-DigitalIn switch1Pin(D4, PullUp), switch2Pin(D5, PullUp);
+DigitalIn switch1Pin(D3, PullDown), switch2Pin(D5, PullDown);
 nRF24L01P radio(D11, D12, D13, D10, D9);
 Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
@@ -26,7 +26,7 @@ void interruptHandler(void)
 {
     status = radio.getStatusRegister();
     if (status == 0)
-    { //sendBuffer not ready?
+    { //status not ready
         while (status == 0)
         {
             status = radio.getStatusRegister();
@@ -59,7 +59,7 @@ void interruptHandler(void)
         packetReceived = true;
     }
 
-    signalStrength = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
+    signalStrength++; // = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
     pos++;
     if (pos >= 100)
     {
@@ -88,68 +88,61 @@ void radioLoop(void)
 
 void screenLoop(void)
 {
-    if (switch1 != oldSwitch1)
+
+    if (switch1)
     {
-        if (switch1)
-        {
-            writeText(&display, const_cast<char*>("ARMED"), 5, 0, 0);
-        }
-        else
-        {
-            writeText(&display, const_cast<char*>("SAFE "), 5, 0, 0);
-        }
-        oldSwitch1 = switch1;
+        writeText(&display, const_cast<char *>("ARMED"), 5, 98, 0);
+    }
+    else
+    {
+        writeText(&display, const_cast<char *>("SAFE "), 5, 98, 0);
     }
 
-    if (switch2 != oldSwitch2)
+    if (switch2)
     {
-        if (switch2)
-        {
-            writeText(&display, const_cast<char*>("STABLE"), 6, 0, 10);
-        }
-        else
-        {
-            writeText(&display, const_cast<char*>("ACRO  "), 6, 0, 10);
-        }
-        oldSwitch2 = switch2;
+        writeText(&display, const_cast<char *>("STABLE"), 6, 0, 0);
+    }
+    else
+    {
+        writeText(&display, const_cast<char *>("ACRO  "), 6, 0, 0);
     }
 
-    writeFloat(&display, battery.read() * 14.20, 4, 85, 0);
+    writeFloat(&display, battery.read() * 14.20, 4, 15, 14);
 
     if (packetReceived)
     {
-        writeFloat(&display, rxBuffer.f, 4, 85, 10);
+        writeFloat(&display, rxBuffer.f, 4, 15, 24);
         packetReceived = false;
         packetNotReceivedCounter = 0;
     }
     else if (!packetNotReceivedCounter)
     {
-        writeText(&display, const_cast<char*>("----"), 4, 85, 10);
+        writeText(&display, const_cast<char *>("----"), 4, 15, 24);
         packetNotReceivedCounter++;
     }
 
-    display.setTextCursor(85, 20);
-
     if (signalStrength <= 5)
     {
-        writeText(&display, const_cast<char*>("---"), 3, 85, 20);
+        writeText(&display, const_cast<char *>("---"), 3, 110, 14);
     }
     else if ((signalStrength > 5) && (signalStrength <= 20))
     {
-        writeText(&display, const_cast<char*>("LOW"), 3, 85, 20);
+        writeText(&display, const_cast<char *>("LOW"), 3, 110, 14);
     }
     else
     {
         char text[10];
-        sprintf(text, "%u", signalStrength);
-        writeText(&display, text, 3, 85, 20);
+        sprintf(text, " %u", signalStrength);
+        if (signalStrength < 100)
+            writeText(&display, text, 3, 110, 14);
+        else
+            writeText(&display, &text[1], 3, 110, 14);
     }
     display.display();
 }
 
 int main()
 {
-    i2cDevice.frequency(400000);
     display.begin(SSD1306_SWITCHCAPVCC);
     display.clearDisplay();
     display.setRotation(2);
@@ -160,7 +153,7 @@ int main()
     uint8_t statRegister = radio.getStatusRegister();
     if ((statRegister != 0x08) && (statRegister != 0x0e) && (statRegister != 0x0f))
     {
-        writeText(&display, const_cast<char*>("TX ERROR"), 8, 70, 0);
+        writeText(&display, const_cast<char *>("TX ERROR"), 8, 70, 0);
         char text[10];
         sprintf(text, "STATUS %u", statRegister);
         writeText(&display, text, 10, 46, 10);
@@ -180,9 +173,10 @@ int main()
         radio.setTransmitMode();
         radioInterrupt.fall(&interruptHandler);
 
-        writeText(&display, const_cast<char*>("TX"), 2, 70, 0);
-        writeText(&display, const_cast<char*>("RX"), 2, 70, 10);
-        writeText(&display, const_cast<char*>("TXRX"), 4, 58, 20);
+        writeText(&display, const_cast<char *>("TX"), 2, 0, 14);
+        writeText(&display, const_cast<char *>("RX"), 2, 0, 24);
+        writeText(&display, const_cast<char *>("TXRX"), 4, 83, 14);
+        display.drawLine(0,10,128,10,WHITE);
 
         display.display();
         radioTicker.attach(&radioLoop, 0.01);
