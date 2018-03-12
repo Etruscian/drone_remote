@@ -10,17 +10,18 @@ InterruptIn radioInterrupt(D8);
 Ticker radioTicker, screenTicker;
 I2C i2cDevice(PB_7, PB_6);
 AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0), battery(A6);
-DigitalIn switch1Pin(D3, PullDown), switch2Pin(D5, PullDown);
+DigitalIn switch1Pin(D6), switch2Pin(D3);
 nRF24L01P radio(D11, D12, D13, D10, D9);
 Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
 _floatUint rxBuffer, gimbalValues[4];
 char sendBuffer[18];
-uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter;
+uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter, counter;
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
-float throttle, roll, pitch, yaw;
+float throttle, roll, pitch, yaw, txBatteryLevel;
 volatile bool switch1, switch2, oldSwitch1 = false, oldSwitch2, packetReceived;
+bool displayInverted = false;
 
 void interruptHandler(void)
 {
@@ -59,7 +60,7 @@ void interruptHandler(void)
         packetReceived = true;
     }
 
-    signalStrength++; // = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
+    signalStrength = movingAvg(signalStrengthArray, &sum, pos, sizeof(signalStrengthArray), signalStrengthRaw);
     pos++;
     if (pos >= 100)
     {
@@ -69,8 +70,8 @@ void interruptHandler(void)
 
 void radioLoop(void)
 {
-    switch1 = true; //(bool)switch1Pin;
-    switch2 = true; //(bool)switch2Pin;
+    switch1 = switch1Pin.read(); //(bool)switch1Pin;
+    switch2 = switch2Pin.read();; //(bool)switch2Pin;
 
     gimbalValues[0].f = throttlePin.read();
     gimbalValues[1].f = (rollPin.read() - 0.54) / 45 * 100;
@@ -107,7 +108,20 @@ void screenLoop(void)
         writeText(&display, const_cast<char *>("ACRO  "), 6, 0, 0);
     }
 
-    writeFloat(&display, battery.read() * 14.20, 4, 15, 14);
+    txBatteryLevel = battery.read() * 3.3 / (220.0/(220.0+473.0));
+    // if (txBatteryLevel >3.0 && txBatteryLevel <=7.4){
+        counter++;
+        if (counter == 5){
+            display.invertDisplay(true);
+            displayInverted = 1- displayInverted;
+            
+        }
+        if (counter ==10){
+            display.invertDisplay(false);
+            counter = 0;
+        }
+    // }
+    writeFloat(&display, txBatteryLevel, 4, 15, 14);
 
     if (packetReceived)
     {
