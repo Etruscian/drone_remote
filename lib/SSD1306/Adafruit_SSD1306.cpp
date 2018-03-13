@@ -131,7 +131,7 @@ void Adafruit_SSD1306::drawPixel(int16_t x, int16_t y, uint16_t color)
 
 void Adafruit_SSD1306::invertDisplay(bool i)
 {
-	command(i ? SSD1306_INVERTDISPLAY : SSD1306_NORMALDISPLAY);
+	commandAsync(i ? SSD1306_INVERTDISPLAY : SSD1306_NORMALDISPLAY);
 }
 
 // Send the display buffer out to the display

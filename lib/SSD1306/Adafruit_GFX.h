@@ -63,6 +63,8 @@ class Adafruit_GFX : public Stream
         , wrap(true)
         {};
 
+    volatile bool transferComplete = true;
+
     /// Paint one BLACK or WHITE pixel in the display buffer
     // this must be defined by the subclass
     virtual void drawPixel(int16_t x, int16_t y, uint16_t color) = 0;

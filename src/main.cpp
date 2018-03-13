@@ -1,4 +1,5 @@
 #include <mbed.h>
+#include "Watchdog.h"
 #include "nRF24L01P.hpp"
 #include "Adafruit_SSD1306.h"
 #include "helpers.hpp"
@@ -6,22 +7,23 @@
 
 Serial pc(USBTX, USBRX);
 
+Watchdog watchdog;
 InterruptIn radioInterrupt(D8);
-Ticker radioTicker, screenTicker;
+Ticker radioTicker, screenTicker, screenBlinkTicker;
 I2C i2cDevice(PB_7, PB_6);
 AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0), battery(A6);
-DigitalIn switch1Pin(D6), switch2Pin(D3);
+DigitalIn switch1Pin(D6, PullUp), switch2Pin(D3, PullUp);
 nRF24L01P radio(D11, D12, D13, D10, D9);
 Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
 _floatUint rxBuffer, gimbalValues[4];
 char sendBuffer[18];
-uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter, counter;
+uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter, counterTX, counterRX;
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
 float throttle, roll, pitch, yaw, txBatteryLevel;
 volatile bool switch1, switch2, oldSwitch1 = false, oldSwitch2, packetReceived;
-bool displayInverted = false;
+bool displayTXInverted = false, displayRXInverted = false;
 
 void interruptHandler(void)
 {
@@ -70,12 +72,12 @@ void interruptHandler(void)
 
 void radioLoop(void)
 {
-    switch1 = switch1Pin.read(); //(bool)switch1Pin;
-    switch2 = switch2Pin.read();; //(bool)switch2Pin;
+    switch1 = switch1Pin.read();
+    switch2 = switch2Pin.read();
 
     gimbalValues[0].f = throttlePin.read();
     gimbalValues[1].f = (rollPin.read() - 0.54) / 45 * 100;
-    gimbalValues[2].f = -1 * (pitchPin.read() - 0.5) * 2;
+    gimbalValues[2].f = (pitchPin.read() - 0.5) * 2;
     gimbalValues[3].f = (yawPin.read() - 0.55) / 47 * 100;
 
     for (int i = 0; i < 16; i++)
@@ -89,7 +91,7 @@ void radioLoop(void)
 
 void screenLoop(void)
 {
-
+    watchdog.Service();
     if (switch1)
     {
         writeText(&display, const_cast<char *>("ARMED"), 5, 98, 0);
@@ -108,24 +110,52 @@ void screenLoop(void)
         writeText(&display, const_cast<char *>("ACRO  "), 6, 0, 0);
     }
 
-    txBatteryLevel = battery.read() * 3.3 / (220.0/(220.0+473.0));
-    // if (txBatteryLevel >3.0 && txBatteryLevel <=7.4){
-        counter++;
-        if (counter == 5){
-            display.invertDisplay(true);
-            displayInverted = 1- displayInverted;
-            
+    txBatteryLevel = battery.read() * 3.3 / (220.0 / (220.0 + 473.0));
+    if (txBatteryLevel <= 7.5)
+    {
+        counterTX++;
+        if (counterTX == 5)
+        {
+            display.setTextColor(BLACK, WHITE);
+            writeFloat(&display, txBatteryLevel, 4, 15, 14);
+            display.setTextColor(WHITE, BLACK);
         }
-        if (counter ==10){
-            display.invertDisplay(false);
-            counter = 0;
+        else if (counterTX == 10)
+        {
+            display.setTextColor(WHITE, BLACK);
+            writeFloat(&display, txBatteryLevel, 4, 15, 14);
+            counterTX = 0;
         }
-    // }
-    writeFloat(&display, txBatteryLevel, 4, 15, 14);
+    } else {
+        display.setTextColor(WHITE, BLACK);
+        writeFloat(&display, txBatteryLevel, 4, 15, 14);
+        counterTX = 0;
+    }
 
     if (packetReceived)
     {
-        writeFloat(&display, rxBuffer.f, 4, 15, 24);
+        if (rxBuffer.f < 15.0)
+        {
+            counterRX++;
+            if (counterRX == 5)
+            {
+                display.setTextColor(BLACK, WHITE);
+                writeFloat(&display, rxBuffer.f, 4, 15, 24);
+                display.setTextColor(WHITE, BLACK);
+            }
+            else if (counterRX == 10)
+            {
+                display.setTextColor(WHITE, BLACK);
+                writeFloat(&display, rxBuffer.f, 4, 15, 24);
+                counterRX = 0;
+            }
+        } else {
+            display.setTextColor(WHITE, BLACK);
+            writeFloat(&display, rxBuffer.f, 4, 15, 24);
+            counterRX = 0;
+        }
+
+
         packetReceived = false;
         packetNotReceivedCounter = 0;
     }
@@ -157,6 +187,7 @@ void screenLoop(void)
 
 int main()
 {
+    i2cDevice.frequency(400000);
     display.begin(SSD1306_SWITCHCAPVCC);
     display.clearDisplay();
     display.setRotation(2);
@@ -190,11 +221,12 @@ int main()
         writeText(&display, const_cast<char *>("TX"), 2, 0, 14);
         writeText(&display, const_cast<char *>("RX"), 2, 0, 24);
         writeText(&display, const_cast<char *>("TXRX"), 4, 83, 14);
-        display.drawLine(0,10,128,10,WHITE);
+        display.drawLine(0, 10, 128, 10, WHITE);
 
         display.display();
         radioTicker.attach(&radioLoop, 0.01);
         screenLoop();
         screenTicker.attach(&screenLoop, 0.1);
+        watchdog.Configure(0.2);
     }
 }

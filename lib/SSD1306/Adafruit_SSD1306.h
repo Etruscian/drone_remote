@@ -67,6 +67,7 @@ public:
 	
 	// These must be implemented in the derived transport driver
 	virtual void command(uint8_t c) = 0;
+	virtual void commandAsync(uint8_t c) = 0;
 	virtual void data(uint8_t c) = 0;
 	virtual void drawPixel(int16_t x, int16_t y, uint16_t color);
 
@@ -78,7 +79,6 @@ public:
 	void display();
 	/// Fill the buffer with the AdaFruit splash screen.
 	virtual void splash();
-	bool transferComplete = true;
     
 protected:
 	virtual void sendDisplayBuffer() = 0;
@@ -119,6 +119,15 @@ public:
 	    };
 
 	void command(uint8_t c)
+	{
+	    cs = 1;
+	    dc = 0;
+	    cs = 0;
+	    mspi.write(c);
+	    cs = 1;
+	};
+
+	void commandAsync(uint8_t c)
 	{
 	    cs = 1;
 	    dc = 0;
@@ -194,7 +203,16 @@ public:
 		buff[0] = 0; // Command Mode
 		buff[1] = c;
 		mi2c.write(mi2cAddress, buff, sizeof(buff));
-	}
+	};
+
+	void commandAsync(uint8_t c)
+	{
+		char buff[2];
+		buff[0] = 0; // Command Mode
+		buff[1] = c;
+		transferComplete = false;
+		mi2c.transfer(mi2cAddress, buff, 2, buff, 0, callback(this,&Adafruit_SSD1306_I2c::i2cInterruptHandler), I2C_EVENT_ALL);
+	};
 
 	void data(uint8_t c)
 	{
@@ -205,7 +223,18 @@ public:
 	};
 
 	void i2cInterruptHandler(int callback){
-		transferComplete = true;
+		if (callback == I2C_EVENT_TRANSFER_COMPLETE){
+			transferComplete = true;
+		}
+		if (callback == I2C_EVENT_ERROR){
+			transferComplete = true;
+		}
+		if (callback == I2C_EVENT_ERROR_NO_SLAVE){
+			transferComplete = true;
+		}
+		if (callback == I2C_EVENT_TRANSFER_EARLY_NACK){
+			transferComplete = true;
+		}
 	};
 
 	uint8_t i2cTransferStatus;
