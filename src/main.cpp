@@ -111,7 +111,7 @@ void screenLoop(void)
     }
 
     txBatteryLevel = battery.read() * 3.3 / (220.0 / (220.0 + 473.0));
-    if (txBatteryLevel <= 7.5)
+    if (txBatteryLevel <= 6.8)
     {
         counterTX++;
         if (counterTX == 5)
@@ -134,7 +134,7 @@ void screenLoop(void)
 
     if (packetReceived)
     {
-        if (rxBuffer.f < 15.0)
+        if (rxBuffer.f < 13.6)
         {
             counterRX++;
             if (counterRX == 5)
