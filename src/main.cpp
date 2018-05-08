@@ -208,7 +208,7 @@ int main()
     {
         radio.powerUp();
         radio.setRfFrequency(2400 + 101);
-        radio.setTransferSize(10);
+        radio.setTransferSize(17);
         radio.setCrcWidth(16);
         radio.setTxAddress(0x007DEADBEE);
         radio.setRxAddress(0x007DEADBEE);
