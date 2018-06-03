@@ -14,7 +14,7 @@ void writeText(Adafruit_SSD1306_I2c * display, char * text, uint16_t length, uin
 
 void writeFloat(Adafruit_SSD1306_I2c * display, float number, uint16_t length, uint8_t x, uint8_t y){
     char string[10];
-    sprintf(string, "%u.%u", (uint16_t)((number)), (uint16_t)((number-(uint16_t)number)*100));
+    sprintf(string, "%u.%02u", (uint16_t)((number)), (uint16_t)((number-(uint16_t)number)*100));
     writeText(display, string, length, x, y);
 };
 

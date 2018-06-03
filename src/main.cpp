@@ -12,7 +12,7 @@ InterruptIn radioInterrupt(D8);
 Ticker radioTicker, screenTicker, screenBlinkTicker;
 I2C i2cDevice(PB_7, PB_6);
 AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0), battery(A6);
-DigitalIn switch1Pin(D6, PullUp), switch2Pin(D3, PullUp);
+DigitalIn switch1Pin(D6, PullUp), switch2Pin(D3, PullUp), switch3Pin(D7), switch4Pin(A7);
 nRF24L01P radio(D11, D12, D13, D10, D9);
 Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
@@ -22,7 +22,7 @@ uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotR
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
 float throttle, roll, pitch, yaw, txBatteryLevel;
-volatile bool switch1, switch2, oldSwitch1 = false, oldSwitch2, packetReceived;
+volatile bool switch1, switch2, switch3, switch4, oldSwitch1 = false, oldSwitch2, packetReceived;
 bool displayTXInverted = false, displayRXInverted = false;
 
 void interruptHandler(void)
@@ -74,18 +74,19 @@ void radioLoop(void)
 {
     switch1 = switch1Pin.read();
     switch2 = switch2Pin.read();
+    switch3 = switch3Pin.read();
+    switch4 = switch4Pin.read();
 
     gimbalValues[0].f = throttlePin.read();
-    gimbalValues[1].f = (rollPin.read() - 0.54) / 45 * 100;
+    gimbalValues[1].f = (rollPin.read() - 0.544) / 45 * 100;
     gimbalValues[2].f = (pitchPin.read() - 0.5) * 2;
-    gimbalValues[3].f = (yawPin.read() - 0.55) / 47 * 100;
+    gimbalValues[3].f = -1*((yawPin.read() - 0.585) / 47 * 100);
 
     for (int i = 0; i < 16; i++)
     {
         sendBuffer[i] = gimbalValues[i / 4].c[i & 3];
     }
-    sendBuffer[16] = ((switch1 & 1) << 1) | (switch2 & 1);
-
+    sendBuffer[16] = ((switch4 & 1) << 3) | ((switch3 & 1) << 2) | ((switch1 & 1) << 1) | (switch2 & 1);
     radio.write(NRF24L01P_PIPE_P0, &sendBuffer[0], 17);
 }
 
@@ -208,10 +209,10 @@ int main()
     {
         radio.powerUp();
         radio.setRfFrequency(2400 + 101);
-        radio.setTransferSize(10);
+        radio.setTransferSize(17);
         radio.setCrcWidth(16);
-        radio.setTxAddress(0x007DEADBEE);
-        radio.setRxAddress(0x007DEADBEE);
+        radio.setTxAddress(0x007deadbee);
+        radio.setRxAddress(0x007deadbee);
         radio.enableAutoAcknowledge(NRF24L01P_PIPE_P0);
         radio.setAirDataRate(NRF24L01P_DATARATE_250_KBPS);
         radio.enableAutoRetransmit(1000, 3);
@@ -227,6 +228,6 @@ int main()
         radioTicker.attach(&radioLoop, 0.01);
         screenLoop();
         screenTicker.attach(&screenLoop, 0.1);
-        watchdog.Configure(0.2);
+        watchdog.Configure(0.5);
     }
 }
