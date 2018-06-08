@@ -2,6 +2,7 @@
 #include "Watchdog.h"
 #include "nRF24L01P.hpp"
 #include "Adafruit_SSD1306.h"
+#include "displayfunctions.hpp"
 #include "helpers.hpp"
 #include "stdio.h"
 
@@ -11,19 +12,18 @@ Watchdog watchdog;
 InterruptIn radioInterrupt(D8);
 Ticker radioTicker, screenTicker, screenBlinkTicker;
 I2C i2cDevice(PB_7, PB_6);
-AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0), battery(A6);
+AnalogIn throttlePin(A1), rollPin(A3), pitchPin(A2), yawPin(A0);
 DigitalIn switch1Pin(D6, PullUp), switch2Pin(D3, PullUp), switch3Pin(D7), switch4Pin(A7);
 nRF24L01P radio(D11, D12, D13, D10, D9);
 Adafruit_SSD1306_I2c display(i2cDevice, D2);
 
 _floatUint rxBuffer, gimbalValues[4];
 char sendBuffer[18];
-uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw, packetNotReceivedCounter, counterTX, counterRX;
+uint8_t status, pos = 0, signalStrengthArray[100], signalStrengthRaw;
 volatile uint8_t signalStrength;
 uint16_t sum = 0;
-float throttle, roll, pitch, yaw, txBatteryLevel;
-volatile bool switch1, switch2, switch3, switch4, oldSwitch1 = false, oldSwitch2, packetReceived;
-bool displayTXInverted = false, displayRXInverted = false;
+float throttle, roll, pitch, yaw;
+volatile bool switch1, switch2, switch3, switch4, packetReceived;
 
 void interruptHandler(void)
 {
@@ -36,29 +36,29 @@ void interruptHandler(void)
         }
     }
 
-    if (status & 1)
+    if (status & 0b00000001)
     { // TX FIFO full
         radio.disable();
         radio.flushTX();
     }
-    if (status & 16)
+    if (status & 0b00010000)
     { // max TX retransmits
         radio.disable();
         radio.flushTX();
-        radio.setRegister(0x07, 16);
+        radio.setRegister(0x07, 0b00010000);
         signalStrengthRaw = 0;
     }
-    if (status & 32)
+    if (status & 0b00100000)
     { // TX sent (ACK package available if autoAck is enabled)
         radio.disable();
         radio.flushTX();
-        radio.setRegister(0x07, 32);
+        radio.setRegister(0x07, 0b00100000);
         signalStrengthRaw = 100;
     }
-    if (status & 64)
+    if (status & 0b01000000)
     { // RX received
         radio.read((status & 14) >> 1, (char *)rxBuffer.c, 4);
-        radio.setRegister(0x07, 64);
+        radio.setRegister(0x07, 0b01000000);
         packetReceived = true;
     }
 
@@ -90,102 +90,6 @@ void radioLoop(void)
     radio.write(NRF24L01P_PIPE_P0, &sendBuffer[0], 17);
 }
 
-void screenLoop(void)
-{
-    watchdog.Service();
-    if (switch1)
-    {
-        writeText(&display, const_cast<char *>("ARMED"), 5, 98, 0);
-    }
-    else
-    {
-        writeText(&display, const_cast<char *>("SAFE "), 5, 98, 0);
-    }
-
-    if (switch2)
-    {
-        writeText(&display, const_cast<char *>("STABLE"), 6, 0, 0);
-    }
-    else
-    {
-        writeText(&display, const_cast<char *>("ACRO  "), 6, 0, 0);
-    }
-
-    txBatteryLevel = battery.read() * 3.3 / (220.0 / (220.0 + 473.0));
-    if (txBatteryLevel <= 6.8)
-    {
-        counterTX++;
-        if (counterTX == 5)
-        {
-            display.setTextColor(BLACK, WHITE);
-            writeFloat(&display, txBatteryLevel, 4, 15, 14);
-            display.setTextColor(WHITE, BLACK);
-        }
-        else if (counterTX == 10)
-        {
-            display.setTextColor(WHITE, BLACK);
-            writeFloat(&display, txBatteryLevel, 4, 15, 14);
-            counterTX = 0;
-        }
-    } else {
-        display.setTextColor(WHITE, BLACK);
-        writeFloat(&display, txBatteryLevel, 4, 15, 14);
-        counterTX = 0;
-    }
-
-    if (packetReceived)
-    {
-        if (rxBuffer.f < 13.6)
-        {
-            counterRX++;
-            if (counterRX == 5)
-            {
-                display.setTextColor(BLACK, WHITE);
-                writeFloat(&display, rxBuffer.f, 4, 15, 24);
-                display.setTextColor(WHITE, BLACK);
-            }
-            else if (counterRX == 10)
-            {
-                display.setTextColor(WHITE, BLACK);
-                writeFloat(&display, rxBuffer.f, 4, 15, 24);
-                counterRX = 0;
-            }
-        } else {
-            display.setTextColor(WHITE, BLACK);
-            writeFloat(&display, rxBuffer.f, 4, 15, 24);
-            counterRX = 0;
-        }
-
-
-        packetReceived = false;
-        packetNotReceivedCounter = 0;
-    }
-    else if (!packetNotReceivedCounter)
-    {
-        writeText(&display, const_cast<char *>("----"), 4, 15, 24);
-        packetNotReceivedCounter++;
-    }
-
-    if (signalStrength <= 5)
-    {
-        writeText(&display, const_cast<char *>("---"), 3, 110, 14);
-    }
-    else if ((signalStrength > 5) && (signalStrength <= 20))
-    {
-        writeText(&display, const_cast<char *>("LOW"), 3, 110, 14);
-    }
-    else
-    {
-        char text[10];
-        sprintf(text, " %u", signalStrength);
-        if (signalStrength < 100)
-            writeText(&display, text, 3, 110, 14);
-        else
-            writeText(&display, &text[1], 3, 110, 14);
-    }
-    display.display();
-}
-
 int main()
 {
     i2cDevice.frequency(400000);
@@ -199,10 +103,10 @@ int main()
     uint8_t statRegister = radio.getStatusRegister();
     if ((statRegister != 0x08) && (statRegister != 0x0e) && (statRegister != 0x0f))
     {
-        writeText(&display, const_cast<char *>("TX ERROR"), 8, 70, 0);
+        writeText(const_cast<char *>("TX ERROR"), 8, 70, 0);
         char text[10];
         sprintf(text, "STATUS %u", statRegister);
-        writeText(&display, text, 10, 46, 10);
+        writeText(text, 10, 46, 10);
         display.display();
     }
     else
@@ -219,10 +123,13 @@ int main()
         radio.setTransmitMode();
         radioInterrupt.fall(&interruptHandler);
 
-        writeText(&display, const_cast<char *>("TX"), 2, 0, 14);
-        writeText(&display, const_cast<char *>("RX"), 2, 0, 24);
-        writeText(&display, const_cast<char *>("TXRX"), 4, 83, 14);
+        writeText(const_cast<char *>("TX"), 2, 0, 14);
+        writeText(const_cast<char *>("RX"), 2, 0, 24);
+        writeText(const_cast<char *>("TXRX"), 4, 83, 14);
         display.drawLine(0, 10, 128, 10, WHITE);
+        // display.drawLine(36,0,36,10,WHITE);
+        // display.drawLine(70,0,70,10,WHITE);
+        // display.drawLine(70,0,70,10,WHITE);
 
         display.display();
         radioTicker.attach(&radioLoop, 0.01);
